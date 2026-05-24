@@ -275,7 +275,6 @@ export default function Sidebar() {
               </span>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-black text-[12px] font-semibold truncate">{userName}</p>
               <p className="text-gray-700 text-[10px] truncate">
                 {roleDisplayMap[userRole] || userRole}
               </p>
