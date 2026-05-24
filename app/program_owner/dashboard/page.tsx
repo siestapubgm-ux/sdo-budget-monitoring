@@ -10,8 +10,20 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
+// ── types ────────────────────────────────────────────────────────────────────
+interface PPA {
+  code: string;
+  title: string;
+  status: "Pending PMT" | "Pending Chief" | "Approved" | "Returned";
+  updated: string;
+  budget: string;
+  objective: string;
+  office: string;
+  quarter: string;
+}
+
 // ── seed data ─────────────────────────────────────────────────────────────────
-const initialPPAs = [
+const initialPPAs: PPA[] = [
   { code:"PPA-2026-001", title:"School-Based Feeding Program",       status:"Approved",      updated:"May 10", budget:"₱320,000",  objective:"Improve nutrition of learners",          office:"Curriculum",    quarter:"Q1" },
   { code:"PPA-2026-002", title:"Brigada Eskwela Implementation",     status:"Pending PMT",   updated:"May 18", budget:"₱85,000",   objective:"Mobilize community for school upkeep",   office:"SGD",           quarter:"Q2" },
   { code:"PPA-2026-003", title:"ALS Mobile Teacher Deployment",      status:"Pending Chief", updated:"May 19", budget:"₱210,000",  objective:"Reach out-of-school youth in communities",office:"ALS",          quarter:"Q1" },
@@ -37,8 +49,8 @@ const OFFICES  = ["Curriculum","SGD","ALS","SPED Unit","SHS Unit","Finance","Pro
 const QUARTERS = ["Q1","Q2","Q3","Q4"];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-function nextCode(ppas) {
-  const nums = ppas.map((p) => parseInt(p.code.split("-")[2]) || 0);
+function nextCode(ppas: PPA[]): string {
+  const nums = ppas.map((p: PPA) => parseInt(p.code.split("-")[2]) || 0);
   const next  = (Math.max(0, ...nums) + 1).toString().padStart(3, "0");
   return `PPA-2026-${next}`;
 }
@@ -48,9 +60,15 @@ function today() {
 }
 
 // ── shared UI ─────────────────────────────────────────────────────────────────
-function Toast({ message, type, visible }) {
+interface ToastProps {
+  message: string;
+  type: "green" | "red" | "blue" | "amber";
+  visible: boolean;
+}
+
+function Toast({ message, type, visible }: ToastProps) {
   if (!visible) return null;
-  const c = { green:"bg-green-50 text-green-700 border-green-200", red:"bg-red-50 text-red-700 border-red-200", blue:"bg-blue-50 text-blue-700 border-blue-200", amber:"bg-amber-50 text-amber-700 border-amber-200" };
+  const c: Record<string, string> = { green:"bg-green-50 text-green-700 border-green-200", red:"bg-red-50 text-red-700 border-red-200", blue:"bg-blue-50 text-blue-700 border-blue-200", amber:"bg-amber-50 text-amber-700 border-amber-200" };
   return (
     <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-lg border text-[12px] font-medium shadow-sm ${c[type]}`}>
       {message}
@@ -58,17 +76,33 @@ function Toast({ message, type, visible }) {
   );
 }
 
-function Backdrop({ onClose, children, wide }) {
+interface BackdropProps {
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}
+
+function Backdrop({ onClose, children, wide }: BackdropProps) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div className={`${wide ? "w-[680px]" : "w-[480px]"} max-w-[97vw]`} onClick={(e) => e.stopPropagation()}>
+      <div className={`${wide ? "w-[680px]" : "w-[480px]"} max-w-[97vw]`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         {children}
       </div>
     </div>
   );
 }
 
-function ModalShell({ title, icon: Icon, iconColor, onClose, children, footer, wide }) {
+interface ModalShellProps {
+  title: string;
+  icon: any;
+  iconColor: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  wide?: boolean;
+}
+
+function ModalShell({ title, icon: Icon, iconColor, onClose, children, footer, wide }: ModalShellProps) {
   return (
     <Backdrop onClose={onClose} wide={wide}>
       <div className="bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
@@ -86,40 +120,47 @@ function ModalShell({ title, icon: Icon, iconColor, onClose, children, footer, w
 }
 
 // ── New PPA modal (with Excel drop) ──────────────────────────────────────────
-function NewPPAModal({ ppas, setPPAs, onClose, toast }) {
+interface NewPPAModalProps {
+  ppas: PPA[];
+  setPPAs: (fn: (prev: PPA[]) => PPA[]) => void;
+  onClose: () => void;
+  toast: (message: string, type: "green" | "red" | "blue" | "amber") => void;
+}
+
+function NewPPAModal({ ppas, setPPAs, onClose, toast }: NewPPAModalProps) {
   const emptyForm = { title:"", office:OFFICES[0], quarter:QUARTERS[0], budget:"", objective:"" };
   const [form, setForm]         = useState(emptyForm);
-  const [tab, setTab]           = useState("manual"); // "manual" | "excel"
+  const [tab, setTab]           = useState<"manual" | "excel">("manual");
   const [dragging, setDragging] = useState(false);
-  const [preview, setPreview]   = useState([]); // rows parsed from excel
+  const [preview, setPreview]   = useState<Array<{ title: string; office: string; quarter: string; budget: string; objective: string }>>([]);
   const [importing, setImporting] = useState(false);
-  const fileRef = useRef();
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
   const submit = () => {
     if (!form.title.trim()) return;
-    const entry = { code: nextCode(ppas), ...form, status:"Pending PMT", updated: today() };
-    setPPAs((p) => [...p, entry]);
+    const entry: PPA = { code: nextCode(ppas), ...form, status:"Pending PMT", updated: today() };
+    setPPAs((p: PPA[]) => [...p, entry]);
     toast(`${entry.code} submitted successfully`, "green");
     onClose();
   };
 
   // ── Excel parsing ──────────────────────────────────────────────────────────
-  const parseFile = (file) => {
+  const parseFile = (file: File | null) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb   = XLSX.read(e.target.result, { type:"binary" });
+        const wb   = XLSX.read(e.target?.result, { type:"binary" });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval:"" });
         // normalise: accept any column order, map common header names
         const norm = rows.map((r) => {
-          const get = (...keys) => {
+          const get = (...keys: string[]) => {
             for (const k of keys) {
-              const found = Object.keys(r).find((rk) => rk.trim().toLowerCase() === k.toLowerCase());
-              if (found) return String(r[found]).trim();
+              const found = Object.keys(r as Record<string, any>).find((rk) => rk.trim().toLowerCase() === k.toLowerCase());
+              if (found) return String((r as Record<string, any>)[found]).trim();
             }
             return "";
           };
@@ -131,7 +172,7 @@ function NewPPAModal({ ppas, setPPAs, onClose, toast }) {
             objective: get("objective","description","details","remarks"),
           };
         }).filter((r) => r.title);
-        setPreview(norm.slice(0, 20)); // cap at 20 rows
+        setPreview(norm.slice(0, 20) as Array<{ title: string; office: string; quarter: string; budget: string; objective: string }>);
       } catch {
         toast("Could not read file. Please use a valid .xlsx or .csv file.", "red");
       }
@@ -139,22 +180,22 @@ function NewPPAModal({ ppas, setPPAs, onClose, toast }) {
     reader.readAsBinaryString(file);
   };
 
-  const onDrop = (e) => {
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) parseFile(file);
   };
 
-  const onFileInput = (e) => {
-    const file = e.target.files[0];
+  const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target?.files?.[0];
     if (file) parseFile(file);
   };
 
   const importAll = () => {
     if (!preview.length) return;
     setImporting(true);
-    const newEntries = preview.map((row, i) => ({
+    const newEntries: Array<PPA> = preview.map((row, i) => ({
       code:      nextCode([...ppas, ...Array(i).fill({ code:`PPA-2026-${999 - i}` })]),
       title:     row.title     || `Imported PPA ${i + 1}`,
       office:    OFFICES.includes(row.office) ? row.office : OFFICES[0],
@@ -165,10 +206,10 @@ function NewPPAModal({ ppas, setPPAs, onClose, toast }) {
       updated:   today(),
     }));
     // recalculate codes properly
-    let base = [...ppas];
-    const final = newEntries.map((entry) => {
+    let base: PPA[] = [...ppas];
+    const final: PPA[] = newEntries.map((entry) => {
       const code = nextCode(base);
-      const e = { ...entry, code };
+      const e: PPA = { ...entry, code };
       base = [...base, e];
       return e;
     });
@@ -318,13 +359,25 @@ function NewPPAModal({ ppas, setPPAs, onClose, toast }) {
 }
 
 // ── Submit WFP modal ──────────────────────────────────────────────────────────
-function SubmitWFPModal({ ppas, onClose, toast }) {
+interface SubmitWFPModalProps {
+  ppas: PPA[];
+  onClose: () => void;
+  toast: (message: string, type: string) => void;
+}
+
+interface SubmitWFPModalProps {
+  ppas: PPA[];
+  onClose: () => void;
+  toast: (message: string, type: "green" | "red" | "blue" | "amber") => void;
+}
+
+function SubmitWFPModal({ ppas, onClose, toast }: SubmitWFPModalProps) {
   const approved = ppas.filter((p) => p.status === "Approved");
-  const [selected, setSelected] = useState([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [period, setPeriod]     = useState("Q1 2026");
   const [remarks, setRemarks]   = useState("");
 
-  const toggle = (code) => setSelected((p) => p.includes(code) ? p.filter((c) => c !== code) : [...p, code]);
+  const toggle = (code: string) => setSelected((p) => p.includes(code) ? p.filter((c) => c !== code) : [...p, code]);
 
   const submit = () => {
     if (!selected.length) return;
@@ -379,26 +432,40 @@ function SubmitWFPModal({ ppas, onClose, toast }) {
 }
 
 // ── View All PPAs modal ───────────────────────────────────────────────────────
-function ViewAllModal({ ppas, setPPAs, onClose, toast }) {
+interface ViewAllModalProps {
+  ppas: PPA[];
+  setPPAs: (fn: (prev: PPA[]) => PPA[]) => void;
+  onClose: () => void;
+  toast: (message: string, type: string) => void;
+}
+
+interface ViewAllModalProps {
+  ppas: PPA[];
+  setPPAs: (fn: (prev: PPA[]) => PPA[]) => void;
+  onClose: () => void;
+  toast: (message: string, type: "green" | "red" | "blue" | "amber") => void;
+}
+
+function ViewAllModal({ ppas, setPPAs, onClose, toast }: ViewAllModalProps) {
   const [filter, setFilter] = useState("All");
-  const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({});
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<PPA>>({});
   const statuses = ["All","Pending PMT","Pending Chief","Approved","Returned"];
   const filtered = filter === "All" ? ppas : ppas.filter((p) => p.status === filter);
 
   const saveEdit = () => {
-    setPPAs((prev) => prev.map((p) => p.code === editId ? { ...p, ...editForm, updated: today() } : p));
+    setPPAs((prev: PPA[]) => prev.map((p) => p.code === editId ? { ...p, ...editForm, updated: today() } : p));
     toast("PPA updated", "green");
     setEditId(null);
   };
 
-  const deletePPA = (code) => {
-    setPPAs((prev) => prev.filter((p) => p.code !== code));
+  const deletePPA = (code: string) => {
+    setPPAs((prev: PPA[]) => prev.filter((p) => p.code !== code));
     toast("PPA removed", "red");
   };
 
-  const resubmit = (code) => {
-    setPPAs((prev) => prev.map((p) => p.code === code ? { ...p, status:"Pending PMT", updated:today() } : p));
+  const resubmit = (code: string) => {
+    setPPAs((prev: PPA[]) => prev.map((p) => p.code === code ? { ...p, status:"Pending PMT", updated:today() } : p));
     toast(`${code} resubmitted`, "blue");
   };
 
@@ -474,7 +541,17 @@ function ViewAllModal({ ppas, setPPAs, onClose, toast }) {
 }
 
 // ── Reports modal ─────────────────────────────────────────────────────────────
-function ReportsModal({ ppas, onClose }) {
+interface ReportsModalProps {
+  ppas: PPA[];
+  onClose: () => void;
+}
+
+interface ReportsModalProps {
+  ppas: PPA[];
+  onClose: () => void;
+}
+
+function ReportsModal({ ppas, onClose }: ReportsModalProps) {
   const total    = ppas.length;
   const approved = ppas.filter((p) => p.status === "Approved").length;
   const returned = ppas.filter((p) => p.status === "Returned").length;
@@ -544,17 +621,19 @@ function ReportsModal({ ppas, onClose }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function ProgramOwnerDashboard() {
-  const [ppas, setPPAs]    = useState(initialPPAs);
-  const [modal, setModal]  = useState(null);
-  const [toast, setToastS] = useState({ visible:false, message:"", type:"green" });
+type ModalKey = "new" | "wfp" | "viewAll" | "reports" | null;
 
-  const showToast = (message, type = "green") => {
+export default function ProgramOwnerDashboard() {
+  const [ppas, setPPAs]    = useState<PPA[]>(initialPPAs);
+  const [modal, setModal]  = useState<ModalKey>(null);
+  const [toast, setToastS] = useState<{ visible: boolean; message: string; type: "green" | "red" | "blue" | "amber" }>({ visible:false, message:"", type:"green" });
+
+  const showToast = (message: string, type: "green" | "red" | "blue" | "amber" = "green") => {
     setToastS({ visible:true, message, type });
     setTimeout(() => setToastS((t) => ({ ...t, visible:false })), 2800);
   };
 
-  const stats = [
+  const stats: Array<{ label: string; value: number; sub: string; icon: any; color: string }> = [
     { label:"My PPAs / PAPs",  value:ppas.length,                                                               sub:"submitted this FY",     icon:FileText,    color:"blue"  },
     { label:"Pending Review",  value:ppas.filter((p)=>p.status==="Pending PMT"||p.status==="Pending Chief").length, sub:"awaiting validator", icon:Clock,       color:"amber" },
     { label:"Approved",        value:ppas.filter((p)=>p.status==="Approved").length,                             sub:"fully approved by SDS", icon:CheckCircle, color:"green" },
@@ -584,7 +663,7 @@ export default function ProgramOwnerDashboard() {
           <div key={s.label} className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-medium text-gray-500">{s.label}</span>
-              <span className={`w-7 h-7 flex items-center justify-center rounded-md border text-xs ${colorMap[s.color]}`}>
+              <span className={`w-7 h-7 flex items-center justify-center rounded-md border text-xs ${colorMap[s.color as keyof typeof colorMap]}`}>
                 <s.icon className="w-3.5 h-3.5" />
               </span>
             </div>
@@ -661,9 +740,9 @@ export default function ProgramOwnerDashboard() {
       </div>
 
       {/* Modals */}
-      {modal === "new"     && <NewPPAModal  ppas={ppas} setPPAs={setPPAs} onClose={() => setModal(null)} toast={showToast} />}
-      {modal === "wfp"     && <SubmitWFPModal ppas={ppas}                 onClose={() => setModal(null)} toast={showToast} />}
-      {modal === "viewAll" && <ViewAllModal ppas={ppas} setPPAs={setPPAs} onClose={() => setModal(null)} toast={showToast} />}
+      {modal === "new"     && <NewPPAModal  ppas={ppas} setPPAs={setPPAs} onClose={() => setModal(null)} toast={(msg, type) => showToast(msg, type as "green" | "red" | "blue" | "amber")} />}
+      {modal === "wfp"     && <SubmitWFPModal ppas={ppas}                 onClose={() => setModal(null)} toast={(msg, type) => showToast(msg, type as "green" | "red" | "blue" | "amber")} />}
+      {modal === "viewAll" && <ViewAllModal ppas={ppas} setPPAs={setPPAs} onClose={() => setModal(null)} toast={(msg, type) => showToast(msg, type as "green" | "red" | "blue" | "amber")} />}
       {modal === "reports" && <ReportsModal ppas={ppas}                   onClose={() => setModal(null)} />}
 
       <Toast message={toast.message} type={toast.type} visible={toast.visible} />

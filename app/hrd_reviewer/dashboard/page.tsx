@@ -1,24 +1,11 @@
 "use client";
 
-import { useState, ReactNode } from "react";
+import { useState } from "react";
 import {
   BookOpen, Clock, CheckCircle, XCircle, FilePlus, ThumbsUp,
   Search, BarChart2, X, Check, ChevronRight, AlertTriangle,
   Download, LayoutGrid, User, Calendar,
 } from "lucide-react";
-
-interface Document {
-  ref: string;
-  title: string;
-  submittedBy: string;
-  status: "For Review" | "In Progress" | "QA Cleared" | "Returned";
-  date: string;
-  type: string;
-  returnReason: string;
-  returnNote: string;
-}
-
-type ToastType = "green" | "red" | "blue" | "amber";
 
 const colorMap = {
   blue:  "bg-blue-50 text-blue-700 border-blue-100",
@@ -54,7 +41,7 @@ const DOC_TYPES = [
   "Other L&D Document",
 ];
 
-const initialDocs: Document[] = [
+const initialDocs: DocItem[] = [
   { ref: "HRD-2026-011", title: "In-Service Training Plan Q2",    submittedBy: "P. Garcia", status: "For Review",  date: "May 19", type: "In-Service Training Plan",    returnReason: "", returnNote: "" },
   { ref: "HRD-2026-012", title: "LAC Session Documentation",      submittedBy: "R. Santos", status: "In Progress", date: "May 18", type: "LAC Session Documentation",    returnReason: "", returnNote: "" },
   { ref: "HRD-2026-013", title: "Scholarship Program Guidelines", submittedBy: "T. Ramos",  status: "QA Cleared",  date: "May 12", type: "Scholarship Program Guidelines", returnReason: "", returnNote: "" },
@@ -64,22 +51,39 @@ const initialDocs: Document[] = [
 
 /* ── helpers ── */
 function agingBadge(dateStr: string): { label: string; cls: string } {
-  const months: { [key: string]: number } = { Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11 };
+  const months: Record<string, number> = { Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11 };
   const [mon, day] = dateStr.split(" ");
-  const days = Math.floor((new Date(2026,4,24).getTime() - new Date(2026, months[mon], parseInt(day)).getTime()) / 86400000);
+  const days = Math.floor(((new Date(2026,4,24).getTime()) - (new Date(2026, months[mon], parseInt(day)).getTime())) / 86400000);
   if (days <= 3) return { label: `${days}d`, cls: "bg-green-50 text-green-600 border border-green-100" };
   if (days <= 6) return { label: `${days}d`, cls: "bg-amber-50 text-amber-600 border border-amber-100" };
   return { label: `${days}d`, cls: "bg-red-50 text-red-600 border border-red-100" };
 }
 
-function nextRef(docs: Document[]): string {
-  const nums = docs.map((d: Document) => parseInt(d.ref.split("-")[2]));
+interface DocItem {
+  ref: string;
+  title: string;
+  submittedBy: string;
+  status: "For Review" | "In Progress" | "QA Cleared" | "Returned";
+  date: string;
+  type: string;
+  returnReason: string;
+  returnNote: string;
+}
+
+function nextRef(docs: DocItem[]): string {
+  const nums = docs.map((d: DocItem) => parseInt(d.ref.split("-")[2]));
   return `HRD-2026-${String(Math.max(...nums) + 1).padStart(3, "0")}`;
 }
 
-function Toast({ message, type, visible }: { message: string; type: ToastType; visible: boolean }): JSX.Element | null {
+interface ToastProps {
+  message: string;
+  type: "green" | "red" | "blue" | "amber";
+  visible: boolean;
+}
+
+function Toast({ message, type, visible }: ToastProps) {
   if (!visible) return null;
-  const c: { [key in ToastType]: string } = { green:"bg-green-50 text-green-700 border-green-200", red:"bg-red-50 text-red-700 border-red-200", blue:"bg-blue-50 text-blue-700 border-blue-200", amber:"bg-amber-50 text-amber-700 border-amber-200" };
+  const c: Record<string, string> = { green:"bg-green-50 text-green-700 border-green-200", red:"bg-red-50 text-red-700 border-red-200", blue:"bg-blue-50 text-blue-700 border-blue-200", amber:"bg-amber-50 text-amber-700 border-amber-200" };
   return (
     <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-lg border text-[12px] font-medium shadow-sm ${c[type]}`}>
       {message}
@@ -87,16 +91,27 @@ function Toast({ message, type, visible }: { message: string; type: ToastType; v
   );
 }
 
-function ModalBackdrop({ onClose, children }: { onClose: () => void; children: ReactNode }): JSX.Element {
+interface ModalBackdropProps {
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+function ModalBackdrop({ onClose, children }: ModalBackdropProps) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 overflow-y-auto py-8" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()}>{children}</div>
+      <div onClick={(e: React.MouseEvent) => e.stopPropagation()}>{children}</div>
     </div>
   );
 }
 
+interface NewReviewModalProps {
+  docs: DocItem[];
+  onCreate: (data: { title: string; type: string; submittedBy: string; notes: string }) => void;
+  onClose: () => void;
+}
+
 /* ── New Review Modal ── */
-function NewReviewModal({ docs, onCreate, onClose }: { docs: Document[]; onCreate: (data: { title: string; type: string; submittedBy: string; notes: string }) => void; onClose: () => void }): JSX.Element {
+function NewReviewModal({ docs, onCreate, onClose }: NewReviewModalProps) {
   const [title, setTitle]       = useState("");
   const [type, setType]         = useState("");
   const [submittedBy, setBy]    = useState("");
@@ -122,7 +137,7 @@ function NewReviewModal({ docs, onCreate, onClose }: { docs: Document[]; onCreat
             <select className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-[12px] text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-gray-300"
               value={type} onChange={(e) => setType(e.target.value)}>
               <option value="">Select type…</option>
-              {DOC_TYPES.map((t: string) => <option key={t} value={t}>{t}</option>)}
+              {DOC_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
@@ -160,13 +175,22 @@ function NewReviewModal({ docs, onCreate, onClose }: { docs: Document[]; onCreat
   );
 }
 
+interface ApproveModalProps {
+  docs: DocItem[];
+  selectedRef: string | null;
+  onSelect: (ref: string) => void;
+  onApprove: (ref: string) => void;
+  onReturn: (ref: string, reason: string, note: string) => void;
+  onClose: () => void;
+}
+
 /* ── Approve Doc Modal ── */
-function ApproveModal({ docs, selectedRef, onSelect, onApprove, onReturn, onClose }: { docs: Document[]; selectedRef: string | null; onSelect: (ref: string) => void; onApprove: (ref: string) => void; onReturn: (ref: string, reason: string, note: string) => void; onClose: () => void }): JSX.Element {
-  const [view, setView]     = useState<"approve" | "return">("approve");
+function ApproveModal({ docs, selectedRef, onSelect, onApprove, onReturn, onClose }: ApproveModalProps) {
+  const [view, setView]     = useState("approve"); // "approve" | "return"
   const [reason, setReason] = useState("");
   const [note, setNote]     = useState("");
-  const item = selectedRef ? docs.find((d: Document) => d.ref === selectedRef) : null;
-  const actionable = docs.filter((d: Document) => d.status === "For Review" || d.status === "In Progress");
+  const item = selectedRef ? docs.find((d: DocItem) => d.ref === selectedRef) : null;
+  const actionable = docs.filter((d: DocItem) => d.status === "For Review" || d.status === "In Progress");
 
   return (
     <ModalBackdrop onClose={onClose}>
@@ -184,7 +208,7 @@ function ApproveModal({ docs, selectedRef, onSelect, onApprove, onReturn, onClos
               <div><p className="text-[11px] text-gray-400 mb-1">Title</p><p className="text-[13px] font-medium text-gray-800">{item.title}</p></div>
               <div><p className="text-[11px] text-gray-400 mb-1">Submitted by</p><p className="text-[12px] text-gray-700">{item.submittedBy}</p></div>
               <div><p className="text-[11px] text-gray-400 mb-1">Current status</p>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[item.status]}`}>{item.status}</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[item.status as keyof typeof statusColor]}`}>{item.status}</span>
               </div>
 
               {/* Toggle */}
@@ -211,7 +235,7 @@ function ApproveModal({ docs, selectedRef, onSelect, onApprove, onReturn, onClos
                     <select className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-[12px] text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-gray-300"
                       value={reason} onChange={(e) => setReason(e.target.value)}>
                       <option value="">Select a reason…</option>
-                      {RETURN_REASONS.map((r: string) => <option key={r} value={r}>{r}</option>)}
+                      {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                   <div>
@@ -230,7 +254,7 @@ function ApproveModal({ docs, selectedRef, onSelect, onApprove, onReturn, onClos
             <div>
               <p className="text-[12px] text-gray-400 mb-3">Select a document to act on:</p>
               <div className="space-y-1.5 max-h-52 overflow-y-auto">
-                {actionable.length > 0 ? actionable.map((d: Document) => (
+                {actionable.length > 0 ? actionable.map((d: DocItem) => (
                   <button key={d.ref} onClick={() => onSelect(d.ref)}
                     className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
                     <div className="min-w-0 flex-1">
@@ -265,11 +289,16 @@ function ApproveModal({ docs, selectedRef, onSelect, onApprove, onReturn, onClos
   );
 }
 
+interface SearchModalProps {
+  docs: DocItem[];
+  onClose: () => void;
+}
+
 /* ── Search Modal ── */
-function SearchModal({ docs, onClose }: { docs: Document[]; onClose: () => void }): JSX.Element {
+function SearchModal({ docs, onClose }: SearchModalProps) {
   const [query, setQuery]   = useState("");
   const [filter, setFilter] = useState("all");
-  const results = docs.filter((d: Document) => {
+  const results = docs.filter((d: DocItem) => {
     const q = query.trim().toLowerCase();
     const matchQ = q.length < 2 || d.ref.toLowerCase().includes(q) || d.title.toLowerCase().includes(q) || d.submittedBy.toLowerCase().includes(q) || d.type.toLowerCase().includes(q);
     const matchF = filter === "all" || d.status === filter;
@@ -304,7 +333,7 @@ function SearchModal({ docs, onClose }: { docs: Document[]; onClose: () => void 
             </select>
           </div>
           <div className="space-y-1.5 max-h-72 overflow-y-auto">
-            {results.length > 0 ? results.map((d: Document) => {
+            {results.length > 0 ? results.map((d: DocItem) => {
               const age = agingBadge(d.date);
               return (
                 <div key={d.ref} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-100 hover:bg-gray-50">
@@ -315,7 +344,7 @@ function SearchModal({ docs, onClose }: { docs: Document[]; onClose: () => void 
                     {d.returnReason && <p className="text-[11px] text-red-500 mt-0.5">Returned: {d.returnReason}</p>}
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[d.status]}`}>{d.status}</span>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[d.status as keyof typeof statusColor]}`}>{d.status}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${age.cls}`}>{age.label}</span>
                   </div>
                 </div>
@@ -332,19 +361,24 @@ function SearchModal({ docs, onClose }: { docs: Document[]; onClose: () => void 
   );
 }
 
+interface ReportsModalProps {
+  docs: DocItem[];
+  onClose: () => void;
+}
+
 /* ── L&D Reports Modal ── */
-function ReportsModal({ docs, onClose }: { docs: Document[]; onClose: () => void }): JSX.Element {
+function ReportsModal({ docs, onClose }: ReportsModalProps) {
   const total     = docs.length;
-  const cleared   = docs.filter((d: Document) => d.status === "QA Cleared").length;
-  const returned  = docs.filter((d: Document) => d.status === "Returned").length;
-  const forReview = docs.filter((d: Document) => d.status === "For Review").length;
-  const inProg    = docs.filter((d: Document) => d.status === "In Progress").length;
+  const cleared   = docs.filter((d: DocItem) => d.status === "QA Cleared").length;
+  const returned  = docs.filter((d: DocItem) => d.status === "Returned").length;
+  const forReview = docs.filter((d: DocItem) => d.status === "For Review").length;
+  const inProg    = docs.filter((d: DocItem) => d.status === "In Progress").length;
   const rate      = total > 0 ? Math.round((cleared / total) * 100) : 0;
 
-  const byType = DOC_TYPES.map((t) => ({
+  const byType = DOC_TYPES.map((t: string) => ({
     type: t,
-    count: docs.filter((d: Document) => d.type === t).length,
-    cleared: docs.filter((d: Document) => d.type === t && d.status === "QA Cleared").length,
+    count: docs.filter((d: DocItem) => d.type === t).length,
+    cleared: docs.filter((d: DocItem) => d.type === t && d.status === "QA Cleared").length,
   })).filter((r) => r.count > 0);
 
   return (
@@ -363,7 +397,7 @@ function ReportsModal({ docs, onClose }: { docs: Document[]; onClose: () => void
               { label: "Returned",    value: returned,  cls: "bg-red-50 border-red-100 text-red-700"       },
               { label: "For Review",  value: forReview, cls: "bg-blue-50 border-blue-100 text-blue-700"    },
               { label: "In Progress", value: inProg,    cls: "bg-amber-50 border-amber-100 text-amber-700" },
-            ].map((s: { label: string; value: number; cls: string }) => (
+            ].map((s) => (
               <div key={s.label} className={`border rounded-lg p-3 ${s.cls}`}>
                 <p className="text-[11px] font-medium">{s.label}</p>
                 <p className="text-[24px] font-semibold mt-0.5">{s.value}</p>
@@ -382,7 +416,7 @@ function ReportsModal({ docs, onClose }: { docs: Document[]; onClose: () => void
           {byType.length > 0 && (
             <div className="border border-gray-100 rounded-lg p-3 bg-gray-50 space-y-2">
               <p className="text-[11px] text-gray-500 font-medium mb-1">By document type</p>
-              {byType.map((r: { type: string; count: number; cleared: number }) => (
+              {byType.map((r) => (
                 <div key={r.type} className="space-y-0.5">
                   <div className="flex justify-between text-[11px]">
                     <span className="text-gray-600 truncate pr-2">{r.type}</span>
@@ -398,10 +432,10 @@ function ReportsModal({ docs, onClose }: { docs: Document[]; onClose: () => void
 
           <div className="border border-gray-100 rounded-lg p-3 bg-gray-50 space-y-1.5">
             <p className="text-[11px] text-gray-500 font-medium">Document breakdown</p>
-            {docs.map((d: Document) => (
+            {docs.map((d: DocItem) => (
               <div key={d.ref} className="flex items-center justify-between text-[11px]">
                 <span className="font-mono text-gray-500">{d.ref}</span>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[d.status]}`}>{d.status}</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[d.status as keyof typeof statusColor]}`}>{d.status}</span>
               </div>
             ))}
           </div>
@@ -418,19 +452,24 @@ function ReportsModal({ docs, onClose }: { docs: Document[]; onClose: () => void
   );
 }
 
+interface BoardModalProps {
+  docs: DocItem[];
+  onClose: () => void;
+  onOpenModal: (modalKey: string) => void;
+  onSelectRef: (ref: string) => void;
+}
+
 /* ── View All Board Modal ── */
-function BoardModal({ docs, onClose, onOpenModal, onSelectRef }: { docs: Document[]; onClose: () => void; onOpenModal: (modal: "new" | "approve" | "search" | "reports" | "board") => void; onSelectRef: (ref: string) => void }): JSX.Element {
-  const COLS = ["For Review", "In Progress", "QA Cleared", "Returned"] as const;
-  type ColumnStatus = typeof COLS[number];
-  
-  const colCfg: { [key in ColumnStatus]: { icon: any; accent: string; bg: string; border: string; text: string; count: string } } = {
+function BoardModal({ docs, onClose, onOpenModal, onSelectRef }: BoardModalProps) {
+  const COLS = ["For Review", "In Progress", "QA Cleared", "Returned"];
+  const colCfg = {
     "For Review":  { icon: BookOpen,    accent: "#3b82f6", bg: "bg-blue-50",  border: "border-blue-200",  text: "text-blue-700",  count: "bg-blue-100 text-blue-700"   },
     "In Progress": { icon: Clock,       accent: "#f59e0b", bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", count: "bg-amber-100 text-amber-700" },
     "QA Cleared":  { icon: CheckCircle, accent: "#22c55e", bg: "bg-green-50", border: "border-green-200", text: "text-green-700", count: "bg-green-100 text-green-700" },
     "Returned":    { icon: XCircle,     accent: "#ef4444", bg: "bg-red-50",   border: "border-red-200",   text: "text-red-700",   count: "bg-red-100 text-red-700"     },
   };
 
-  function handleAction(ref: string): void {
+  function handleAction(ref: string) {
     onSelectRef(ref);
     onClose();
     onOpenModal("approve");
@@ -454,10 +493,10 @@ function BoardModal({ docs, onClose, onOpenModal, onSelectRef }: { docs: Documen
         </div>
         <div className="p-4 overflow-x-auto">
           <div className="flex gap-3 min-w-[640px]">
-            {COLS.map((status: ColumnStatus) => {
-              const cfg = colCfg[status];
+            {COLS.map((status: string) => {
+              const cfg = colCfg[status as keyof typeof colCfg];
               const Icon = cfg.icon;
-              const items = docs.filter((d: Document) => d.status === status);
+              const items = docs.filter((d: DocItem) => d.status === status);
               const canAct = status === "For Review" || status === "In Progress";
               return (
                 <div key={status} className="flex-1 min-w-[150px]">
@@ -469,7 +508,7 @@ function BoardModal({ docs, onClose, onOpenModal, onSelectRef }: { docs: Documen
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${cfg.count}`}>{items.length}</span>
                   </div>
                   <div className={`border-x border-b ${cfg.border} rounded-b-lg p-2 space-y-2 min-h-[160px] bg-gray-50/50`}>
-                    {items.length > 0 ? items.map((d: Document) => {
+                    {items.length > 0 ? items.map((d: DocItem) => {
                       const age = agingBadge(d.date);
                       return (
                         <div key={d.ref} className="bg-white border border-gray-200 rounded-lg p-2.5 space-y-1.5 shadow-sm hover:shadow-md transition-shadow">
@@ -510,21 +549,23 @@ function BoardModal({ docs, onClose, onOpenModal, onSelectRef }: { docs: Documen
   );
 }
 
+type ModalKey = "new" | "approve" | "search" | "reports" | "board" | null;
+
 /* ── Main Dashboard ── */
 export default function HRDReviewerDashboard() {
-  const [docs, setDocs]            = useState<Document[]>(initialDocs);
+  const [docs, setDocs]            = useState<DocItem[]>(initialDocs);
   const [selectedRef, setSelected] = useState<string | null>(null);
-  const [modal, setModal]          = useState<"new" | "approve" | "search" | "reports" | "board" | null>(null);
-  const [toast, setToast]          = useState<{ visible: boolean; message: string; type: ToastType }>({ visible: false, message: "", type: "green" });
+  const [modal, setModal]          = useState<ModalKey>(null);
+  const [toast, setToast]          = useState<{ visible: boolean; message: string; type: "green" | "red" | "blue" | "amber" }>({ visible: false, message: "", type: "green" });
 
-  const showToast = (message: string, type: ToastType = "green"): void => {
+  const showToast = (message: string, type: "green" | "red" | "blue" | "amber" = "green") => {
     setToast({ visible: true, message, type });
     setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2800);
   };
 
-  const handleCreate = (data: { title: string; type: string; submittedBy: string; notes: string }): void => {
+  const handleCreate = (data: { title: string; type: string; submittedBy: string; notes: string }) => {
     const ref = nextRef(docs);
-    setDocs((prev) => [...prev, {
+    setDocs((prev: DocItem[]) => [...prev, {
       ref, title: data.title, type: data.type, submittedBy: data.submittedBy,
       status: "For Review", date: "May 24", returnReason: "", returnNote: "",
     }]);
@@ -532,33 +573,33 @@ export default function HRDReviewerDashboard() {
     showToast(`✓ ${ref} added to review queue`, "blue");
   };
 
-  const handleApprove = (ref: string): void => {
-    setDocs((prev) => prev.map((d) => d.ref === ref ? { ...d, status: "QA Cleared", returnReason: "", returnNote: "" } : d));
+  const handleApprove = (ref: string) => {
+    setDocs((prev: DocItem[]) => prev.map((d) => d.ref === ref ? { ...d, status: "QA Cleared", returnReason: "", returnNote: "" } : d));
     setSelected(null); setModal(null);
     showToast(`✓ ${ref} QA cleared`, "green");
   };
 
-  const handleReturn = (ref: string, reason: string, note: string): void => {
-    setDocs((prev) => prev.map((d) => d.ref === ref ? { ...d, status: "Returned", returnReason: reason, returnNote: note } : d));
+  const handleReturn = (ref: string, reason: string, note: string) => {
+    setDocs((prev: DocItem[]) => prev.map((d) => d.ref === ref ? { ...d, status: "Returned", returnReason: reason, returnNote: note } : d));
     setSelected(null); setModal(null);
     showToast(`↩ ${ref} returned: ${reason}`, "red");
   };
 
-  const stats = [
-    { label: "For QA Review", value: docs.filter((d) => d.status === "For Review").length,  sub: "training/L&D docs pending", icon: BookOpen,    color: "blue"  },
-    { label: "In Progress",   value: docs.filter((d) => d.status === "In Progress").length,  sub: "currently reviewing",       icon: Clock,       color: "amber" },
-    { label: "QA Cleared",    value: docs.filter((d) => d.status === "QA Cleared").length,   sub: "documents approved",        icon: CheckCircle, color: "green" },
-    { label: "Returned",      value: docs.filter((d) => d.status === "Returned").length,     sub: "needs revision",            icon: XCircle,     color: "red"   },
+  const stats: Array<{ label: string; value: number; sub: string; icon: any; color: string }> = [
+    { label: "For QA Review", value: docs.filter((d: DocItem) => d.status === "For Review").length,  sub: "training/L&D docs pending", icon: BookOpen,    color: "blue"  },
+    { label: "In Progress",   value: docs.filter((d: DocItem) => d.status === "In Progress").length,  sub: "currently reviewing",       icon: Clock,       color: "amber" },
+    { label: "QA Cleared",    value: docs.filter((d: DocItem) => d.status === "QA Cleared").length,   sub: "documents approved",        icon: CheckCircle, color: "green" },
+    { label: "Returned",      value: docs.filter((d: DocItem) => d.status === "Returned").length,     sub: "needs revision",            icon: XCircle,     color: "red"   },
   ];
 
-  const returnedDocs   = docs.filter((d) => d.status === "Returned");
-  const pendingCount   = docs.filter((d) => d.status === "For Review" || d.status === "In Progress").length;
+  const returnedDocs   = docs.filter((d: DocItem) => d.status === "Returned");
+  const pendingCount   = docs.filter((d: DocItem) => d.status === "For Review" || d.status === "In Progress").length;
 
-  const quickActions = [
-    { label: "New Review",  icon: FilePlus,  key: "new" as const,     hoverCls: "hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"   },
-    { label: "Approve Doc", icon: ThumbsUp,  key: "approve" as const, hoverCls: "hover:bg-green-50 hover:border-green-200 hover:text-green-700" },
-    { label: "Search Docs", icon: Search,    key: "search" as const,  hoverCls: "hover:bg-gray-50 hover:border-gray-200"                        },
-    { label: "L&D Reports", icon: BarChart2, key: "reports" as const, hoverCls: "hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700" },
+  const quickActions: Array<{ label: string; icon: any; key: ModalKey; hoverCls: string }> = [
+    { label: "New Review",  icon: FilePlus,  key: "new",     hoverCls: "hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"   },
+    { label: "Approve Doc", icon: ThumbsUp,  key: "approve", hoverCls: "hover:bg-green-50 hover:border-green-200 hover:text-green-700" },
+    { label: "Search Docs", icon: Search,    key: "search",  hoverCls: "hover:bg-gray-50 hover:border-gray-200"                        },
+    { label: "L&D Reports", icon: BarChart2, key: "reports", hoverCls: "hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700" },
   ];
 
   return (
@@ -569,7 +610,7 @@ export default function HRDReviewerDashboard() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map((s: { label: string; value: number; sub: string; icon: any; color: string }) => (
+        {stats.map((s) => (
           <div key={s.label} className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-medium text-gray-500">{s.label}</span>
@@ -592,7 +633,7 @@ export default function HRDReviewerDashboard() {
             </button>
           </div>
           <div className="divide-y divide-gray-50">
-            {docs.map((d: Document) => (
+            {docs.map((d: DocItem) => (
               <div key={d.ref}
                 onClick={() => setSelected(selectedRef === d.ref ? null : d.ref)}
                 className={`px-4 py-3 flex items-center justify-between gap-3 cursor-pointer transition-colors ${selectedRef === d.ref ? "bg-blue-50" : "hover:bg-gray-50"}`}>
@@ -603,7 +644,7 @@ export default function HRDReviewerDashboard() {
                   {d.returnReason && <p className="text-[11px] text-red-500 mt-0.5 truncate">Returned: {d.returnReason}</p>}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[d.status]}`}>{d.status}</span>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColor[d.status as keyof typeof statusColor]}`}>{d.status}</span>
                   <span className="text-[10px] text-gray-300">{d.date}</span>
                 </div>
               </div>
@@ -637,7 +678,7 @@ export default function HRDReviewerDashboard() {
             <span className="text-[13px] font-semibold text-gray-800">Quick Actions</span>
           </div>
           <div className="p-3 grid grid-cols-2 gap-2">
-            {quickActions.map((a: { label: string; icon: any; key: "new" | "approve" | "search" | "reports"; hoverCls: string }) => (
+            {quickActions.map((a) => (
               <button key={a.label} onClick={() => setModal(a.key)}
                 className={`flex flex-col items-center gap-1.5 p-3 rounded-md border border-gray-100 transition-colors text-center text-gray-500 ${a.hoverCls}`}>
                 <a.icon className="w-4 h-4" />
@@ -657,7 +698,7 @@ export default function HRDReviewerDashboard() {
             {returnedDocs.length > 0 && (
               <div className="bg-red-50 border border-red-100 rounded-md p-3">
                 <p className="text-[11px] font-semibold text-red-700">{returnedDocs.length} returned doc{returnedDocs.length > 1 ? "s" : ""}</p>
-                {returnedDocs.map((d: Document) => (
+                {returnedDocs.map((d) => (
                   <p key={d.ref} className="text-[11px] text-red-600 mt-0.5">
                     <span className="font-mono">{d.ref}</span> — {d.returnReason}
                   </p>
@@ -669,12 +710,12 @@ export default function HRDReviewerDashboard() {
       </div>
 
       {modal === "new"     && <NewReviewModal docs={docs} onCreate={handleCreate} onClose={() => setModal(null)} />}
-      {modal === "approve" && <ApproveModal   docs={docs} selectedRef={selectedRef} onSelect={setSelected} onApprove={handleApprove} onReturn={handleReturn} onClose={() => setModal(null)} />}
+      {modal === "approve" && <ApproveModal   docs={docs} selectedRef={selectedRef} onSelect={(ref: string) => setSelected(ref)} onApprove={handleApprove} onReturn={handleReturn} onClose={() => setModal(null)} />}
       {modal === "search"  && <SearchModal    docs={docs} onClose={() => setModal(null)} />}
       {modal === "reports" && <ReportsModal   docs={docs} onClose={() => setModal(null)} />}
-      {modal === "board"   && <BoardModal     docs={docs} onClose={() => setModal(null)} onOpenModal={setModal} onSelectRef={setSelected} />}
+      {modal === "board"   && <BoardModal     docs={docs} onClose={() => setModal(null)} onOpenModal={(k: string) => setModal(k as ModalKey)} onSelectRef={(ref: string) => setSelected(ref)} />}
 
-      <Toast message={toast.message} type={toast.type} visible={toast.visible} />
+      <Toast message={toast.message} type={toast.type as "green" | "red" | "blue" | "amber"} visible={toast.visible} />
     </main>
   );
 }
