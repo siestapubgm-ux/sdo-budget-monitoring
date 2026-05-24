@@ -1,5 +1,0 @@
-{
-  "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/pmt_validator/dashboard/page": "app/pmt_validator/dashboard/page.js",
-  "/pmis_coordinator/dashboard/page": "app/pmis_coordinator/dashboard/page.js"
-}
