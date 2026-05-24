@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..900;1,14..32,300..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: #F1F4F8;
+  color: #0F172A;
+}
+
+/* Tabular numbers for financial data */
+.num { font-variant-numeric: tabular-nums; }
+
+/* Custom scrollbar — thin and neutral */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* Table row hover */
+tbody tr:hover { background-color: #F8FAFC; }
+
+/* Smooth focus ring */
+*:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+}
+
+/* Mobile-friendly viewport settings */
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+  
+  input, button, select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Ensure touch targets are at least 44x44px on mobile */
+@media (max-width: 768px) {
+  button, a, input[type="checkbox"], input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media print {
+  aside, header, .no-print { display: none !important; }
+  body { background: white; }
+}
